@@ -21,7 +21,7 @@ package com.katapal.actor
 
 import java.util.concurrent.TimeoutException
 
-import akka.actor.{Actor, ActorRef, ActorSelection, Terminated}
+import akka.actor._
 import akka.util.Timeout
 import com.katapal.actor.DeferrableActor.CallId
 
@@ -31,7 +31,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.language.higherKinds
 import scala.reflect.{ClassTag, classTag}
 import scala.util._
-
+import akka.pattern._
 
 /** Method types for [[ContractActor]] should be case classes subclassing [[Returning]].  The method arguments should be
   * the case class's arguments and the return type should be the type parameter of [[Returning]].
@@ -75,19 +75,7 @@ object ContractActor {
   * There are three types of handles that can be used to wrap a [[ContractActor]].  When interacting
   * with a [[ContractActor]] from either a normal actor or outside of any actor,
   * one can use the [[scala.concurrent.Future]]-based interface provided by [[StandaloneHandle]].
-  *
-  * When calling another [[ContractActor]] from inside a [[ContractActor]], there are two types of handles:
-  * - [[ContractActor#SyncLikeHandle]]
-  * - [[ContractActor#AsyncHandle]]
-  *
-  * A [[ContractActor#SyncLikeHandle]] provides a synchronous-like interface using Scala
-  * continuations.
-  *
-  * A [[ContractActor#AsyncHandle]] provides an asynchronous interface based on
-  * special-purpose futures implemented in [[ContractActor#Future]].
-  *
-  * Refer to each of the handle documentations for further details on their usage.
-  *
+
   * To use the [[ContractActor]] framework, first define the contract for the methods to be implemented by
   * subclassing [[Returning]].  (This usually goes in the companion object to the actor you are creating.)
   * Then define the actor you are creating as a subclass of [[ContractActor]] and provide an implementation of the
@@ -264,7 +252,7 @@ abstract class ContractActor(timeout: Timeout) extends DeferrableActor {
         case Left(a) => Future.successful(a)
         case Right(s) =>
           val f = s.resolveOne()(t)
-          f foreach context.watch
+          f.foreach(d => context.watch(d))
           f
       }) flatMap { dest: ActorRef =>
         sendCall(c, dest, delay)(classTag[T], t)

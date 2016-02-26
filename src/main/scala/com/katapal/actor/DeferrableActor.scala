@@ -75,7 +75,7 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
 
     // Process a response to a callback. Since reply does not necessarily come from original destination
     // (since it may have been forwarded), so identify it using *only* its ID.
-    case r: Reply[_] =>
+    case r: Reply[Any] =>
 
       callbacks.get(r.id) match {
         case Some(p) =>

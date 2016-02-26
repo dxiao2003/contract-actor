@@ -19,6 +19,16 @@ object ContractTestProbe {
     */
   def apply()(implicit timeout: Timeout,  as: ActorSystem) =
     new ContractTestProbe
+
+  /** Create a new [[ContractTestProbe]]
+    *
+    * @param name The path to this probe
+    * @param timeout Time for the test probe to wait for responses before timing out.
+    * @param as The actor system.
+    * @return The new [[ContractTestProbe]].
+    */
+  def apply(name: String)(implicit timeout: Timeout,  as: ActorSystem) =
+    new ContractTestProbe(name)
 }
 
 /** A probe that helps test [[ContractActor]]s.  Mainly provides convenience methods that manage the call ID's of
@@ -27,10 +37,17 @@ object ContractTestProbe {
   * @param t Timeout to wait for responses.
   * @param actorSystem The actor system where the probe should be created.
   */
-class ContractTestProbe(implicit t: Timeout, actorSystem: ActorSystem) {
+class ContractTestProbe(name: Option[String])(implicit t: Timeout, actorSystem: ActorSystem) {
 
-  val testProbe = TestProbe()
+  val testProbe = name match {
+    case Some(n) => TestProbe(n)
+    case None => TestProbe()
+  }
   val timeout = t.duration
+
+  def this()(implicit t: Timeout, actorSystem: ActorSystem) = this(None)
+
+  def this(n: String)(implicit t: Timeout, actorSystem: ActorSystem) = this(Some(n))
 
   /** @return The underlying [[akka.actor.Actor]]. */
   def ref: ActorRef = testProbe.ref
