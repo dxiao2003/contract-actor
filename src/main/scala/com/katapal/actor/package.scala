@@ -1,38 +1,37 @@
 package com.katapal
 
-import akka.actor.{ActorRef, ActorSelection}
-import akka.routing.Router
+import scala.concurrent.{Promise, Future, ExecutionContext, Await}
 
+import akka.actor._
+import akka.routing.Router
+import akka.util.Timeout
+import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
+import scala.util.{Failure, Success, Try}
 
 /** Katapal actor package containing [[com.katapal.actor.ContractActor]], a typesafe way of calling actors. */
 
 package object actor {
 
-  /** Convenience interface allowing us to call either an [[akka.actor.ActorRef]] or [[akka.actor.ActorSelection]].
-    * Implicit conversions from [[ActorRef]] and [[ActorSelection]] are provided.
-    */
-  trait ActorRefLike extends Any {
-    def tell(msg: Any, sender: ActorRef): Unit
-  }
 
-  private case class AR(a:ActorRef) extends AnyVal with ActorRefLike {
-    def tell(msg: Any, sender: ActorRef): Unit = {
-      a.!(msg)(sender)
-    }
+  def deferResolvePath(path: ActorPath, iterations: Int, delay: FiniteDuration)
+                      (implicit timeout: Timeout,
+                       system: ActorSystem,
+                       ec: ExecutionContext): Future[ActorRef] = {
+    val sel = system.actorSelection(path)
+    val scheduler = system.scheduler
+    (1 to iterations).foldLeft[Future[ActorRef]](Future.failed(ActorNotFound(sel)))((prev, _) =>
+      prev recoverWith {
+        case ActorNotFound(_) =>
+          val p = Promise[ActorRef]
+          scheduler.scheduleOnce(delay) {
+            // wait until the child actor has been created
+            system.actorSelection(path).resolveOne() foreach p.success
+          }
+          p.future
+        case x =>
+          Future.failed(x)
+      }
+    )
   }
-  private case class AS(a:ActorSelection) extends AnyVal with ActorRefLike {
-    def tell(msg: Any, sender: ActorRef): Unit = {
-      a.!(msg)(sender)
-    }
-  }
-  private case class R(r: Router) extends AnyVal with ActorRefLike {
-    def tell(msg: Any, sender: ActorRef): Unit = {
-      r.route(msg, sender)
-    }
-  }
-
-  implicit def actorRefToAR(a: ActorRef): ActorRefLike = AR(a)
-  implicit def actorSelToAS(a: ActorSelection): ActorRefLike = AS(a)
-  implicit def routerToR(r: Router): ActorRefLike = R(r)
 }
