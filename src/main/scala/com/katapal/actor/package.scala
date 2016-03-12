@@ -1,13 +1,18 @@
+/*
+ * Copyright (c) 2016. Katapal, Inc.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.katapal
 
-import scala.concurrent.{Promise, Future, ExecutionContext, Await}
-
 import akka.actor._
-import akka.routing.Router
 import akka.util.Timeout
+
 import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
 
 /** Katapal actor package containing [[com.katapal.actor.ContractActor]], a typesafe way of calling actors. */
 

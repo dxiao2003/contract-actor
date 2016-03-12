@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2016. Katapal, Inc.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.katapal.actor
 
 import java.util.concurrent.Executor
@@ -20,17 +27,26 @@ import scala.util.{Failure, Success, Try}
 object DeferrableActor {
   type Callback = Promise[Any]
 
-  case class TimeoutCallback(callID: CallId)
+  private[actor] case class TimeoutCallback(callID: CallId)
 
-  case class CallId(id: Long) extends AnyVal
+  private[actor] case class CallId(id: Long) extends AnyVal
 
   // Reply contains the ID of the corresponding call, along with a data
   // field that contains either the return data or an exception
-  case class Reply[T](val id: CallId, val data: Try[T])
-  val directExecutionContext = ExecutionContext.fromExecutor(new Executor { def execute(c: Runnable): Unit = c.run()})
+  private[actor] case class Reply[T](val id: CallId, val data: Try[T])
+
+  private val directExecutionContext =
+    ExecutionContext.fromExecutor(new Executor { def execute(c: Runnable): Unit = c.run()})
 }
 
-
+/**
+  * A [[DeferrableActor]] is an [[Actor]] that includes a special implicit [[ExecutionContext]] that schedules
+  * functions to be called within the message-processing loop of the actor.  This guarantees that [[Future]]s and
+  * [[Promise]]s that are executed within the [[DeferrableActor]] are thread-safe, since we are guaranteed that
+  * an actor can only process one message at a time.  Because the execution class is set as implicit within the
+  * definition of [[DeferrableActor]], all subclasses will automatically use it by default and no additional
+  * configuration needs to be done.
+  */
 abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
   import DeferrableActor._
 
@@ -40,12 +56,20 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
   // call IDs are assigned using an incrementing counter
   private var callCounter = 0L
 
-  /** Returns true if there is a call currently running */
+  /** Returns true if there is at least one call currently outstanding. */
   protected def alreadyRunning: Boolean = callbacks.nonEmpty
 
-  // The execution context for Future's in this DeferrableActor.  This execution context is bound to the
-  // Deferrable and executes a Runnable by adding it as a callback and immediately sending the Reply that makes it
-  // run.
+  /**
+    * The default execution context in this [[DeferrableActor]].  The [[DeferrableActor]] keeps a map that maps
+    * [[CallId]]s to [[Promise]]s that need to be executed.
+    *
+    * It schedules a function to be run by adding a [[Promise]] that executes when fulfilled.  The [[Promise]]s are
+    * fulfilled when a [[Reply]] is received specifying the [[Promise]] to be executed.  If the [[Promise]] needs to be
+    * fulfilled with a value then the [[Reply]] should also provide that value.
+    *
+    * Scheduled [[Promise]]s can be interrupted with a [[TimeoutException]] if a [[TimeoutCallback]] with the
+    * corresponding [[CallId]] is received.
+    */
   protected implicit val deferrableExecutionContext = ExecutionContext.fromExecutor(new Executor {
     def execute(command: Runnable): Unit = {
       // add the runnable as a callback
@@ -58,9 +82,11 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
     }
   })
 
-  def receive: Actor.Receive = receiveDeferrable
+  override def aroundReceive(receive: Actor.Receive, msg: Any): Unit = {
+    (receiveDeferrable orElse receive).applyOrElse(msg, unhandled)
+  }
 
-  def receiveDeferrable: Actor.Receive = {
+  final private def receiveDeferrable: Actor.Receive = {
     // A control message to cancel a callback due to the timeout being exceeded.
     case TimeoutCallback(callID) => callbacks.get(callID) match {
       case Some(p) =>
@@ -69,12 +95,12 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
         removeCallback(callID)
 
       case None =>
-      // it's possible the response was received while the TimeoutCallback was waiting to be processed;
-      // this should be fine so just act as if timeout did not occur
+      // it's possible a Reply was received while the TimeoutCallback was in the message inbox waiting to be
+      // processed; this should be fine so just act as if timeout did not occur
     }
 
-    // Process a response to a callback. Since reply does not necessarily come from original destination
-    // (since it may have been forwarded), so identify it using *only* its ID.
+    // Process a response to a callback. Since the reply does not necessarily come from original destination
+    // (since it may have been forwarded), identify the call using *only* its ID.
     case r: Reply[Any] =>
 
       callbacks.get(r.id) match {
@@ -92,7 +118,13 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
       }
   }
 
-  /** Schedule a cancellation for the callback for callID after t has elapsed */
+  /**
+    * Schedule a cancellation for the callback for callID after t has elapsed
+    *
+    * @param callID The call to time out
+    * @param t The time to wait
+    * @return A [[akka.actor.Cancellable]] that can be used to cancel the timeout
+    */
   protected def scheduleTimeout(callID: CallId, t: Timeout) = {
     context.system.scheduler.scheduleOnce(
       t.duration, self, TimeoutCallback(callID)
@@ -102,7 +134,7 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
   /** Add a callback onto the callbacks map
     *
     * @param callback The callback to be added.
-    * @return The key for this callback as it was added to the callbacks map.
+    * @return The call ID for this callback as it was added to the callbacks map.
     */
   protected def addCallback(callback: Promise[Any]): CallId = {
 
@@ -114,78 +146,12 @@ abstract class DeferrableActor extends Actor with akka.actor.ActorLogging {
     callId
   }
 
+  /**
+    * Remove a callback
+    *
+    * @param callID The ID of the callback to remove
+    */
   protected def removeCallback(callID: CallId): Unit = {
     callbacks -= callID
   }
-
-  /** Wait for all [[scala.concurrent.Future]]s in `futureMap` to complete and return a map of the results.  The
-    * results are in the form of [[Try]]s so we can see each single exception rather than an overall failure if some
-    * of the [[Future]]s end in failure.  As with [[ContractActor#deferAndAwait]], this does not block; if the
-    * [[Future]]s are not ready immediately it registers a callback and then releases the current thread.
-    *
-    * @param fm A keyed map of [[Future]]s.
-    * @tparam K The type of key.
-    * @tparam T The type of [[Future]].
-    * @return A keyed map of the results of the [[Future]]s.  Each entry contains either [[Success]] if the
-    *         corresponding [[Future]] succeeded or [[Failure]] otherwise.
-    */
-  protected def futureMap[K,T](fm: Map[K,Future[T]]) : Future[Map[K,Try[T]]] = {
-    new FutureCollector(fm).future
-  }
-
-  protected def executeNow[T](x: => T): Future[T] = {
-    Future.fromTry(Try(x))
-  }
-
-  /** Convenience class for collecting futures in an [[Iterable]] together.
-    *
-    * @param futureMap The [[Map]] of [[Future]]s we want to collect together.
-    * @tparam T
-    */
-  private class FutureCollector[K, T](futureMap: Map[K, Future[T]]) {
-
-    private val incompleteFutures: mutable.HashSet[Future[T]] = mutable.HashSet.empty[Future[T]]
-    private val values: mutable.HashMap[K, Try[T]] = mutable.HashMap.empty[K, Try[T]]
-
-    private val promise = Promise[Map[K, Try[T]]]()
-
-    futureMap foreach { case (k, f) =>
-      // register callback on each future to notify the collector when they are done
-      f.value match {
-        case Some(Success(x)) => values += ((k, Success(x)))
-        case Some(Failure(e)) => values += ((k, Failure(e)))
-        case None =>
-          log.debug(s"registering callback for future $f in collector")
-          incompleteFutures += f
-          f onComplete { t =>
-            log.debug(s"future $f in collector completed")
-            incompleteFutures -= f
-            t match {
-              case Success(x) => values += ((k, Success(x)))
-              case Failure(e) => values += ((k, Failure(e)))
-            }
-
-            finishIfComplete()
-          }
-      }
-    }
-
-    finishIfComplete()
-
-    private def finishIfComplete() = {
-      log.debug(s"checking incomplete futures: $incompleteFutures")
-      if (incompleteFutures.isEmpty) {
-        if (!(futureMap.values forall {
-          _.isCompleted
-        }))
-          throw new UnknownError("Futures should be all completed but not")
-        else
-          promise.success(values.toMap)
-      }
-    }
-
-    /** @return A [[Future]] that is completed when all of the [[Future]]s in the sequence are completed. */
-    def future: Future[Map[K, Try[T]]] = promise.future
-  }
-
 }

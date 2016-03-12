@@ -1,17 +1,24 @@
+/*
+ * Copyright (c) 2016. Katapal, Inc.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.katapal.actor
 package test
 
 import akka.actor._
 import akka.testkit.{TestActorRef, TestKit}
 import akka.util.Timeout
-import com.katapal.actor.ContractActor.CallHandler
-import org.scalatest.{Matchers, BeforeAndAfterAll, WordSpecLike}
+import com.katapal.actor.ContractActor.{Returning, CallHandler}
+import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
+import scala.async.Async.{async, await}
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, TimeoutException}
 import scala.language.reflectiveCalls
 import scala.util._
-import scala.async.Async.{async, await}
 
 object ContractActorSpec {
 
@@ -175,10 +182,8 @@ object ContractActorSpec {
 
 class ContractActorSpec(system: ActorSystem) extends TestKit(system) with WordSpecLike
     with BeforeAndAfterAll with Matchers {
-  import com.katapal.actor.test.ContractActorSpec.EvaluatorActor
-  import com.katapal.actor.test.ContractActorSpec.Evaluator
   import com.katapal.actor.test.ContractActorSpec.Evaluator._
-  import com.katapal.actor.test.ContractActorSpec._
+  import com.katapal.actor.test.ContractActorSpec.{Evaluator, EvaluatorActor, _}
 
 
   private implicit val timeout = Timeout(1.minute)

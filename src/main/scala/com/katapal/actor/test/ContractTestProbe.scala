@@ -1,11 +1,18 @@
+/*
+ * Copyright (c) 2016. Katapal, Inc.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.katapal.actor
 package test
 
 import akka.actor.{ActorRef, ActorSystem}
+import akka.testkit.TestProbe
 import akka.util.Timeout
 import com.katapal.actor.ContractActor._
 import com.katapal.actor.DeferrableActor._
-import akka.testkit.TestProbe
 
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}

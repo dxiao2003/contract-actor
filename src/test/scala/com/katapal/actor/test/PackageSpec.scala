@@ -1,15 +1,21 @@
+/*
+ * Copyright (c) 2016. Katapal, Inc.
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+ * If a copy of the MPL was not distributed with this file, you can obtain one at http://mozilla.org/MPL/2.0/.
+ */
+
 package com.katapal.actor.test
 
-import akka.actor.{Actor, ActorRef, Props, ActorSystem}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.pattern._
 import akka.testkit.{TestActorRef, TestKit}
 import akka.util.Timeout
-import akka.pattern._
-import org.scalatest.{Matchers, BeforeAndAfterAll, FunSpecLike}
+import com.katapal.actor.deferResolvePath
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import com.katapal.actor.deferResolvePath
 
 /**
   * Created by David on 2/26/2016.
