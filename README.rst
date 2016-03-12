@@ -37,7 +37,7 @@ outside the ``ContractActor`` framework (e.g. handling ``DeathWatch`` messages).
   }
 
 
-Note that ``ContractActor#receiveCall`` should return a ``Future`` containing the expected type.  All ``Exception``s
+Note that ``ContractActor#receiveCall`` should return a ``Future`` containing the expected type.  All ``Exception``'s
 will be sent back to the caller unless wrapped in an ``EscalateException``.  ``EscalateException`` instances will be
 processed as a normal ``Actor`` would (by notifying the supervisor).
 
