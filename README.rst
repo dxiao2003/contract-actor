@@ -4,8 +4,8 @@ Contract Actors for Scala/Akka
 This package defines a framework to use Akka actors in a typesafe way.  The framework allows you to create typesafe
 wrappers around ``ActorRef``'s that conform to a pre-defined contract of supported messages and expected responses.
 
-``Contract Actors``
--------------------
+``ContractActor``
+-----------------
 
 To use the framework, define the contract of the methods that the actor supports.
 A contract is a subclass of ``ContractActor.Returning``.  The contract class's parameters
@@ -65,8 +65,8 @@ the body of an ``Actor``.
 -------------------
 
 A ``DeferrableActor`` is an ``Actor`` that includes a special implicit ``ExecutionContext`` that schedules
-functions to be called within the message-processing loop of the actor.  This guarantees that ``Future``s and
-``Promise``s that are used within the ``DeferrableActor`` are thread-safe, since we are guaranteed that
+functions to be called within the message-processing loop of the actor.  This guarantees that ``Future``'s and
+``Promise``'s that are used within the ``DeferrableActor`` are thread-safe, since we are guaranteed that
 an actor can only process one message at a time.  Because the execution class is set as implicit within the
 definition of ``DeferrableActor``, all subclasses will automatically use it by default and no additional
 configuration needs to be done.
