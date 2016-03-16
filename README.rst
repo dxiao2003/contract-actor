@@ -27,7 +27,7 @@ implementation of the ``ContractActor#receiveCall`` method that handles all mess
 Optionally also implement ``ContractActor#receiveOther``, which processes messages that are
 outside the ``ContractActor`` framework (e.g. handling ``DeathWatch`` messages).
 
-.. code-block: scala
+.. code-block:: scala
 
   class Dog(t: Timeout) extends ContractActor(t) {
     override def receiveCall: CallHandler = {
